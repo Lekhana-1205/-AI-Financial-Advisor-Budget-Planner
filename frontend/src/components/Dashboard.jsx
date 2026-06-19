@@ -54,6 +54,29 @@ export default function Dashboard({ token, activeAlert, dataVersion }) {
   const [heatmapMonth, setHeatmapMonth] = useState(new Date().getMonth());
   const [heatmapYear, setHeatmapYear] = useState(new Date().getFullYear());
 
+  const getDateKey = (value) => {
+    if (!value) return "";
+    if (typeof value === "string") return value.slice(0, 10);
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return "";
+    const yyyy = date.getFullYear();
+    const mm = String(date.getMonth() + 1).padStart(2, "0");
+    const dd = String(date.getDate()).padStart(2, "0");
+    return `${yyyy}-${mm}-${dd}`;
+  };
+
+  const getMoneyValue = (value) => {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : 0;
+  };
+
+  const getTransactionTitle = (tx) => {
+    const description = tx.description?.trim();
+    if (description) return description;
+    if (tx.type === "expense") return tx.category || "Expense";
+    return tx.source || "Income";
+  };
+
   useEffect(() => {
     fetchDashboardData();
     fetchHeatmapData();
@@ -74,7 +97,7 @@ export default function Dashboard({ token, activeAlert, dataVersion }) {
 
   const fetchDashboardData = async () => {
     try {
-      const res = await fetch(`http://127.0.0.1:8000/api/analytics/dashboard?t=${Date.now()}`, {
+      const res = await fetch(`/api/analytics/dashboard?t=${Date.now()}`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       if (res.ok) {
@@ -90,21 +113,62 @@ export default function Dashboard({ token, activeAlert, dataVersion }) {
 
   const fetchHeatmapData = async () => {
     try {
-      const res = await fetch(`http://127.0.0.1:8000/api/analytics/heatmap?t=${Date.now()}`, {
-        headers: { Authorization: `Bearer ${token}` }
+      const [expensesRes, incomeRes] = await Promise.all([
+        fetch(`/api/expenses?t=${Date.now()}`, {
+          headers: { Authorization: `Bearer ${token}` }
+        }),
+        fetch(`/api/income?t=${Date.now()}`, {
+          headers: { Authorization: `Bearer ${token}` }
+        })
+      ]);
+
+      if (!expensesRes.ok || !incomeRes.ok) return;
+
+      const [expenses, incomes] = await Promise.all([
+        expensesRes.json(),
+        incomeRes.json()
+      ]);
+
+      const byDate = {};
+
+      expenses.forEach(expense => {
+        const dateKey = getDateKey(expense.date);
+        if (!dateKey) return;
+        const totals = byDate[dateKey] || { date: dateKey, expense_amount: 0, income_amount: 0, transaction_count: 0 };
+        totals.expense_amount += getMoneyValue(expense.amount);
+        totals.transaction_count += 1;
+        byDate[dateKey] = totals;
       });
-      if (res.ok) {
-        setHeatmapData(await res.json());
-      }
+
+      incomes.forEach(income => {
+        const dateKey = getDateKey(income.date);
+        if (!dateKey) return;
+        const totals = byDate[dateKey] || { date: dateKey, expense_amount: 0, income_amount: 0, transaction_count: 0 };
+        totals.income_amount += getMoneyValue(income.amount);
+        totals.transaction_count += 1;
+        byDate[dateKey] = totals;
+      });
+
+      setHeatmapData(Object.values(byDate).sort((a, b) => a.date.localeCompare(b.date)));
     } catch (err) {
       console.error(err);
+      try {
+        const res = await fetch(`/api/analytics/heatmap?t=${Date.now()}`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        if (res.ok) {
+          setHeatmapData(await res.json());
+        }
+      } catch (fallbackErr) {
+        console.error(fallbackErr);
+      }
     }
   };
 
   const fetchAiAnalysis = async () => {
     setAiLoading(true);
     try {
-      const res = await fetch("http://127.0.0.1:8000/api/ai/analyze", {
+      const res = await fetch("/api/ai/analyze", {
         headers: { Authorization: `Bearer ${token}` }
       });
       if (res.ok) {
@@ -121,7 +185,7 @@ export default function Dashboard({ token, activeAlert, dataVersion }) {
   const fetchPredictions = async () => {
     setPredLoading(true);
     try {
-      const res = await fetch("http://127.0.0.1:8000/api/ai/predict", {
+      const res = await fetch("/api/ai/predict", {
         headers: { Authorization: `Bearer ${token}` }
       });
       if (res.ok) {
@@ -137,7 +201,7 @@ export default function Dashboard({ token, activeAlert, dataVersion }) {
   const fetchPersonality = async () => {
     setPersonalityLoading(true);
     try {
-      const res = await fetch(`http://127.0.0.1:8000/api/ai/personality?t=${Date.now()}`, {
+      const res = await fetch(`/api/ai/personality?t=${Date.now()}`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       if (res.ok) {
@@ -156,11 +220,11 @@ export default function Dashboard({ token, activeAlert, dataVersion }) {
     setSelectedDayDetails({ totalSpent: spentAmount, categoryBreakdown: {}, transactions: [] });
     
     try {
-      const expensesRes = await fetch("http://127.0.0.1:8000/api/expenses", {
+      const expensesRes = await fetch("/api/expenses", {
         headers: { Authorization: `Bearer ${token}` }
       });
       
-      const incomeRes = await fetch("http://127.0.0.1:8000/api/income", {
+      const incomeRes = await fetch("/api/income", {
         headers: { Authorization: `Bearer ${token}` }
       });
       
@@ -168,12 +232,13 @@ export default function Dashboard({ token, activeAlert, dataVersion }) {
         const allExpenses = await expensesRes.json();
         const allIncome = await incomeRes.json();
         
-        const dayExpenses = allExpenses.filter(e => e.date === dateStr);
-        const dayIncome = allIncome.filter(i => i.date === dateStr);
+        const dayExpenses = allExpenses.filter(e => getDateKey(e.date) === dateStr);
+        const dayIncome = allIncome.filter(i => getDateKey(i.date) === dateStr);
+        const totalSpent = dayExpenses.reduce((sum, e) => sum + getMoneyValue(e.amount), 0);
         
         const breakdown = {};
         dayExpenses.forEach(e => {
-          breakdown[e.category] = (breakdown[e.category] || 0) + e.amount;
+          breakdown[e.category] = (breakdown[e.category] || 0) + getMoneyValue(e.amount);
         });
         
         const txs = [
@@ -182,7 +247,7 @@ export default function Dashboard({ token, activeAlert, dataVersion }) {
         ];
         
         setSelectedDayDetails({
-          totalSpent: spentAmount,
+          totalSpent,
           categoryBreakdown: breakdown,
           transactions: txs
         });
@@ -196,7 +261,7 @@ export default function Dashboard({ token, activeAlert, dataVersion }) {
 
   const triggerDownloadReport = async () => {
     try {
-      const res = await fetch(`http://127.0.0.1:8000/api/reports/download?t=${Date.now()}`, {
+      const res = await fetch(`/api/reports/download?t=${Date.now()}`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       if (res.ok) {
@@ -223,7 +288,7 @@ export default function Dashboard({ token, activeAlert, dataVersion }) {
     return <div style={{ color: "var(--text-muted)", textAlign: "center", padding: "80px 0" }}>Loading financial dashboard...</div>;
   }
 
-  const { monthly_summary, categories: catSpend, budgets, alerts, health_score, weaknesses } = data;
+  const { monthly_summary, categories: catSpend, budgets, alerts, health_score, strengths, weaknesses } = data;
 
   // Chart 1: Income vs Expense (Bar Chart)
   const barChartData = {
@@ -315,7 +380,14 @@ export default function Dashboard({ token, activeAlert, dataVersion }) {
     // Compile heatmap values by date
     const dateMap = {};
     heatmapData.forEach(d => {
-      dateMap[d.date] = d.amount;
+      const dateKey = getDateKey(d.date);
+      if (!dateKey) return;
+      const existing = dateMap[dateKey] || { expenseAmount: 0, incomeAmount: 0, transactionCount: 0 };
+      dateMap[dateKey] = {
+        expenseAmount: existing.expenseAmount + getMoneyValue(d.expense_amount ?? d.amount ?? d.total),
+        incomeAmount: existing.incomeAmount + getMoneyValue(d.income_amount),
+        transactionCount: existing.transactionCount + getMoneyValue(d.transaction_count ?? d.count)
+      };
     });
 
     const cells = [];
@@ -344,12 +416,16 @@ export default function Dashboard({ token, activeAlert, dataVersion }) {
       const dd = String(cellDate.getDate()).padStart(2, "0");
       const dateStr = `${yyyy}-${mm}-${dd}`;
       
-      const spent = dateMap[dateStr] || 0;
+      const dayTotals = dateMap[dateStr] || { expenseAmount: 0, incomeAmount: 0, transactionCount: 0 };
+      const spent = dayTotals.expenseAmount;
+      const earned = dayTotals.incomeAmount;
+      const hasTransactions = dayTotals.transactionCount > 0 || spent > 0 || earned > 0;
       const isCurrentMonth = cellDate.getMonth() === heatmapMonth;
       
       // Calculate color opacity based on spending intensity
       let colorClass = "rgba(255, 255, 255, 0.02)";
       let textColor = isCurrentMonth ? "var(--text-muted)" : "rgba(255, 255, 255, 0.08)";
+      let borderColor = isCurrentMonth ? "rgba(255, 255, 255, 0.03)" : "transparent";
       
       if (spent > 0) {
         textColor = "#ffffff";
@@ -357,6 +433,11 @@ export default function Dashboard({ token, activeAlert, dataVersion }) {
         else if (spent < 1500) colorClass = "rgba(99, 102, 241, 0.45)";
         else if (spent < 4000) colorClass = "rgba(99, 102, 241, 0.7)";
         else colorClass = "rgba(168, 85, 247, 0.9)"; // High spending in bright violet
+        if (earned > 0) borderColor = "rgba(16, 185, 129, 0.75)";
+      } else if (hasTransactions) {
+        textColor = "#ffffff";
+        colorClass = "rgba(16, 185, 129, 0.22)";
+        borderColor = "rgba(16, 185, 129, 0.55)";
       }
 
       cells.push(
@@ -367,9 +448,9 @@ export default function Dashboard({ token, activeAlert, dataVersion }) {
             background: colorClass, 
             color: textColor, 
             cursor: "pointer",
-            border: isCurrentMonth ? "1px solid rgba(255, 255, 255, 0.03)" : "1px solid transparent"
+            border: `1px solid ${borderColor}`
           }}
-          title={`${dateStr}: ₹${spent.toLocaleString()}`}
+          title={`${dateStr}: spent ₹${spent.toLocaleString()}, income ₹${earned.toLocaleString()}`}
           onClick={() => handleDateClick(dateStr, spent)}
         >
           {cellDate.getDate()}
@@ -658,10 +739,11 @@ export default function Dashboard({ token, activeAlert, dataVersion }) {
             <div style={{ width: "100%", textAlign: "left" }}>
               <h4 style={{ fontSize: "14px", color: "white", marginBottom: "8px" }}>Strengths / Weaknesses</h4>
               <ul style={{ listStyle: "none", fontSize: "13px", display: "flex", flexDirection: "column", gap: "6px" }}>
-                {data.health_strengths ? data.health_strengths.map((s, idx) => (
-                  <li key={idx} style={{ color: "#a7f3d0" }}>✓ {s}</li>
-                )) : weaknesses.map((w, idx) => (
-                  <li key={idx} style={{ color: "#fca5a5" }}>✗ {w}</li>
+                {strengths && strengths.map((s, idx) => (
+                  <li key={`str-${idx}`} style={{ color: "#a7f3d0" }}>✓ {s}</li>
+                ))}
+                {weaknesses && weaknesses.filter(w => w !== "None detected! Keep maintaining this structure.").map((w, idx) => (
+                  <li key={`wk-${idx}`} style={{ color: "#fca5a5" }}>✗ {w}</li>
                 ))}
               </ul>
             </div>
@@ -802,8 +884,8 @@ export default function Dashboard({ token, activeAlert, dataVersion }) {
                     {selectedDayDetails.transactions.map((tx, idx) => (
                       <div key={idx} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px", background: "rgba(255, 255, 255, 0.02)", borderRadius: "8px", border: "1px solid rgba(255, 255, 255, 0.04)" }}>
                         <div>
-                          <div style={{ fontWeight: "600", color: "white", fontSize: "13px" }}>{tx.description || tx.source || "Transaction"}</div>
-                          <span style={{ fontSize: "10px", color: "var(--text-muted)" }}>{tx.type === "expense" ? tx.category : "Income"}</span>
+                          <div style={{ fontWeight: "600", color: "white", fontSize: "13px" }}>{getTransactionTitle(tx)}</div>
+                          <span style={{ fontSize: "10px", color: "var(--text-muted)" }}>{tx.type === "expense" ? tx.category || "Expense" : tx.source || "Income"}</span>
                         </div>
                         <span style={{ fontWeight: "700", color: tx.type === "expense" ? "var(--danger)" : "var(--success)" }}>
                           {tx.type === "expense" ? "-" : "+"} ₹{tx.amount.toLocaleString()}

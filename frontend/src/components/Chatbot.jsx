@@ -37,7 +37,7 @@ export default function Chatbot({ token }) {
     setLoading(true);
 
     try {
-      const res = await fetch("http://127.0.0.1:8000/api/ai/chatbot", {
+      const res = await fetch("/api/ai/chatbot", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

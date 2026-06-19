@@ -19,7 +19,7 @@ export default function Income({ token, dataVersion, triggerRefresh }) {
   const fetchIncomes = async () => {
     setLoading(true);
     try {
-      const res = await fetch("http://127.0.0.1:8000/api/income", {
+      const res = await fetch("/api/income", {
         headers: { Authorization: `Bearer ${token}` }
       });
       if (res.ok) {
@@ -36,7 +36,7 @@ export default function Income({ token, dataVersion, triggerRefresh }) {
     e.preventDefault();
     if (!incomeAmount || !incomeSource) return;
     try {
-      const res = await fetch("http://127.0.0.1:8000/api/income", {
+      const res = await fetch("/api/income", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -64,7 +64,7 @@ export default function Income({ token, dataVersion, triggerRefresh }) {
   const handleDeleteIncome = async (id) => {
     if (!confirm("Are you sure you want to delete this income source?")) return;
     try {
-      const res = await fetch(`http://127.0.0.1:8000/api/income/${id}`, {
+      const res = await fetch(`/api/income/${id}`, {
         method: "DELETE",
         headers: { Authorization: `Bearer ${token}` }
       });

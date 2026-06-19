@@ -11,7 +11,9 @@ import {
   LogOut, 
   User,
   Activity,
-  Repeat
+  Repeat,
+  Eye,
+  EyeOff
 } from "lucide-react";
 
 // Import custom components
@@ -25,6 +27,7 @@ import OCRScanner from "./components/OCRScanner";
 import RecurringExpenses from "./components/RecurringExpenses";
 
 export default function App() {
+  const googleAuthEnabled = import.meta.env.VITE_ENABLE_GOOGLE_AUTH === "true";
   const [token, setToken] = useState(localStorage.getItem("token") || "");
   const [user, setUser] = useState(null);
   const [activeTab, setActiveTab] = useState("dashboard");
@@ -35,6 +38,7 @@ export default function App() {
   const [password, setPassword] = useState("");
   const [email, setEmail] = useState("");
   const [authError, setAuthError] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
 
   // Settings State
   const [settings, setSettings] = useState({ email_reports_enabled: true, alert_threshold: 0.90 });
@@ -48,6 +52,22 @@ export default function App() {
   const triggerRefresh = () => setDataVersion(v => v + 1);
 
   useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const googleToken = params.get("google_token");
+    const googleError = params.get("auth_error");
+
+    if (googleToken) {
+      localStorage.setItem("token", googleToken);
+      setToken(googleToken);
+      setAuthError("");
+      window.history.replaceState({}, document.title, window.location.pathname);
+    } else if (googleError) {
+      setAuthError(googleError);
+      window.history.replaceState({}, document.title, window.location.pathname);
+    }
+  }, []);
+
+  useEffect(() => {
     if (token) {
       fetchUser();
       fetchSettings();
@@ -58,7 +78,7 @@ export default function App() {
 
   const fetchUser = async () => {
     try {
-      const res = await fetch("http://127.0.0.1:8000/api/auth/me", {
+      const res = await fetch("/api/auth/me", {
         headers: { Authorization: `Bearer ${token}` }
       });
       if (res.ok) {
@@ -74,7 +94,7 @@ export default function App() {
 
   const fetchSettings = async () => {
     try {
-      const res = await fetch("http://127.0.0.1:8000/api/settings", {
+      const res = await fetch("/api/settings", {
         headers: { Authorization: `Bearer ${token}` }
       });
       if (res.ok) {
@@ -94,7 +114,7 @@ export default function App() {
       : { username, password, email };
 
     try {
-      const res = await fetch(`http://127.0.0.1:8000${endpoint}`, {
+      const res = await fetch(endpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body)
@@ -115,6 +135,11 @@ export default function App() {
     }
   };
 
+  const handleGoogleAuth = () => {
+    setAuthError("");
+    window.location.href = "/api/auth/google/login";
+  };
+
   const handleLogout = () => {
     localStorage.removeItem("token");
     setToken("");
@@ -126,7 +151,7 @@ export default function App() {
     e.preventDefault();
     setSettingsSaved(false);
     try {
-      const res = await fetch("http://127.0.0.1:8000/api/settings", {
+      const res = await fetch("/api/settings", {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
@@ -197,14 +222,37 @@ export default function App() {
 
             <div className="form-group">
               <label>Password</label>
-              <input 
-                type="password" 
-                className="form-control" 
-                placeholder="••••••••" 
-                value={password} 
-                onChange={(e) => setPassword(e.target.value)} 
-                required 
-              />
+              <div style={{ position: "relative" }}>
+                <input 
+                  type={showPassword ? "text" : "password"} 
+                  className="form-control" 
+                  style={{ width: "100%", paddingRight: "44px" }}
+                  placeholder="••••••••" 
+                  value={password} 
+                  onChange={(e) => setPassword(e.target.value)} 
+                  required 
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  style={{
+                    position: "absolute",
+                    right: "12px",
+                    top: "50%",
+                    transform: "translateY(-50%)",
+                    background: "none",
+                    border: "none",
+                    color: "var(--text-muted)",
+                    cursor: "pointer",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    padding: "4px"
+                  }}
+                >
+                  {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                </button>
+              </div>
             </div>
 
             {authError && (
@@ -218,18 +266,38 @@ export default function App() {
             </button>
           </form>
 
+          {googleAuthEnabled && (
+            <>
+              <div style={{ display: "flex", alignItems: "center", gap: "10px", margin: "22px 0 16px" }}>
+                <span style={{ height: "1px", flex: 1, background: "rgba(255,255,255,0.08)" }} />
+                <span style={{ color: "var(--text-dim)", fontSize: "12px", textTransform: "uppercase", letterSpacing: "1px" }}>or</span>
+                <span style={{ height: "1px", flex: 1, background: "rgba(255,255,255,0.08)" }} />
+              </div>
+
+              <button
+                type="button"
+                onClick={handleGoogleAuth}
+                className="btn btn-secondary"
+                style={{ width: "100%", background: "rgba(255,255,255,0.96)", color: "#1f2937" }}
+              >
+                <span style={{ width: "20px", height: "20px", borderRadius: "50%", display: "inline-flex", alignItems: "center", justifyContent: "center", color: "#4285f4", fontWeight: "800", fontFamily: "Arial, sans-serif" }}>G</span>
+                {isLoginView ? "Sign in with Google" : "Sign up with Google"}
+              </button>
+            </>
+          )}
+
           <div className="auth-footer">
             {isLoginView ? (
               <span>
                 Don't have an account?{" "}
-                <span className="auth-link" onClick={() => { setIsLoginView(false); setAuthError(""); }}>
+                <span className="auth-link" onClick={() => { setIsLoginView(false); setAuthError(""); setShowPassword(false); }}>
                   Register here
                 </span>
               </span>
             ) : (
               <span>
                 Already have an account?{" "}
-                <span className="auth-link" onClick={() => { setIsLoginView(true); setAuthError(""); }}>
+                <span className="auth-link" onClick={() => { setIsLoginView(true); setAuthError(""); setShowPassword(false); }}>
                   Log in here
                 </span>
               </span>

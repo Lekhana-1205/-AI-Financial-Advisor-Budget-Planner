@@ -22,7 +22,7 @@ export default function Expenses({ token, onAddExpense, dataVersion, triggerRefr
   const fetchExpenses = async () => {
     setLoading(true);
     try {
-      const res = await fetch("http://127.0.0.1:8000/api/expenses", {
+      const res = await fetch("/api/expenses", {
         headers: { Authorization: `Bearer ${token}` }
       });
       if (res.ok) {
@@ -39,7 +39,7 @@ export default function Expenses({ token, onAddExpense, dataVersion, triggerRefr
     e.preventDefault();
     if (!expenseAmount) return;
     try {
-      const res = await fetch("http://127.0.0.1:8000/api/expenses", {
+      const res = await fetch("/api/expenses", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -70,7 +70,7 @@ export default function Expenses({ token, onAddExpense, dataVersion, triggerRefr
   const handleDeleteExpense = async (id) => {
     if (!confirm("Are you sure you want to delete this expense?")) return;
     try {
-      const res = await fetch(`http://127.0.0.1:8000/api/expenses/${id}`, {
+      const res = await fetch(`/api/expenses/${id}`, {
         method: "DELETE",
         headers: { Authorization: `Bearer ${token}` }
       });

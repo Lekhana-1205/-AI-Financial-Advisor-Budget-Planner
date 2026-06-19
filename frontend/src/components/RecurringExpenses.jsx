@@ -29,7 +29,7 @@ export default function RecurringExpenses({ token, dataVersion, triggerRefresh }
   const fetchRecurringExpenses = async () => {
     setLoading(true);
     try {
-      const res = await fetch("http://127.0.0.1:8000/api/recurring-expenses", {
+      const res = await fetch("/api/recurring-expenses", {
         headers: { Authorization: `Bearer ${token}` }
       });
       if (res.ok) {
@@ -71,8 +71,8 @@ export default function RecurringExpenses({ token, dataVersion, triggerRefresh }
     };
 
     const url = isEditing 
-      ? `http://127.0.0.1:8000/api/recurring-expenses/${editId}`
-      : "http://127.0.0.1:8000/api/recurring-expenses";
+      ? `/api/recurring-expenses/${editId}`
+      : "/api/recurring-expenses";
     
     const method = isEditing ? "PUT" : "POST";
 
@@ -120,7 +120,7 @@ export default function RecurringExpenses({ token, dataVersion, triggerRefresh }
     setSuccess("");
 
     try {
-      const res = await fetch(`http://127.0.0.1:8000/api/recurring-expenses/${id}`, {
+      const res = await fetch(`/api/recurring-expenses/${id}`, {
         method: "DELETE",
         headers: { Authorization: `Bearer ${token}` }
       });
@@ -139,7 +139,7 @@ export default function RecurringExpenses({ token, dataVersion, triggerRefresh }
 
   const handleToggleActive = async (id) => {
     try {
-      const res = await fetch(`http://127.0.0.1:8000/api/recurring-expenses/${id}/toggle`, {
+      const res = await fetch(`/api/recurring-expenses/${id}/toggle`, {
         method: "PUT",
         headers: { Authorization: `Bearer ${token}` }
       });

@@ -19,7 +19,7 @@ export default function Budget({ token, onAddExpense, dataVersion, triggerRefres
   const fetchBudgetData = async () => {
     setLoading(true);
     try {
-      const res = await fetch("http://127.0.0.1:8000/api/analytics/dashboard", {
+      const res = await fetch("/api/analytics/dashboard", {
         headers: { Authorization: `Bearer ${token}` }
       });
       if (res.ok) {
@@ -36,7 +36,7 @@ export default function Budget({ token, onAddExpense, dataVersion, triggerRefres
     e.preventDefault();
     if (!newBudgetLimit) return;
     try {
-      const res = await fetch("http://127.0.0.1:8000/api/budgets", {
+      const res = await fetch("/api/budgets", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -58,22 +58,29 @@ export default function Budget({ token, onAddExpense, dataVersion, triggerRefres
     }
   };
 
-  const handleDeleteBudget = async (category) => {
-    if (!confirm(`Are you sure you want to delete the budget for ${category}?`)) return;
-    try {
-      const budgetObj = data.budgets.find(b => b.category === category);
-      if (!budgetObj) return;
+  const handleDeleteBudget = async (budget) => {
+    if (!budget?.id) {
+      alert("Could not remove this budget because its ID is missing. Please refresh and try again.");
+      return;
+    }
 
-      const res = await fetch(`http://127.0.0.1:8000/api/budgets/${budgetObj.id}`, {
+    if (!confirm(`Are you sure you want to delete the budget for ${budget.category}?`)) return;
+    try {
+      const res = await fetch(`/api/budgets/${budget.id}`, {
         method: "DELETE",
         headers: { Authorization: `Bearer ${token}` }
       });
       if (res.ok) {
         if (triggerRefresh) triggerRefresh();
         else fetchBudgetData();
+      } else {
+        const errorText = await res.text();
+        console.error("Failed to delete budget", errorText);
+        alert("Failed to remove this budget. Please try again.");
       }
     } catch (err) {
       console.error(err);
+      alert("Error removing budget. Please try again.");
     }
   };
 
@@ -174,7 +181,8 @@ export default function Budget({ token, onAddExpense, dataVersion, triggerRefres
                       <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
                         <span style={{ fontWeight: "600", color: "white" }}>{b.category}</span>
                         <button 
-                          onClick={() => handleDeleteBudget(b.category)}
+                          type="button"
+                          onClick={() => handleDeleteBudget(b)}
                           style={{ background: "transparent", border: "none", color: "var(--text-dim)", cursor: "pointer", fontSize: "11px" }}
                           onMouseEnter={(e) => e.currentTarget.style.color = "var(--danger)"}
                           onMouseLeave={(e) => e.currentTarget.style.color = "var(--text-dim)"}

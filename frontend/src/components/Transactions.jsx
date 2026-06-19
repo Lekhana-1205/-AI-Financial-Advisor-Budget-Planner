@@ -27,10 +27,10 @@ export default function Transactions({ token, onAddExpense }) {
   const fetchData = async () => {
     setLoading(true);
     try {
-      const incRes = await fetch("http://127.0.0.1:8000/api/income", {
+      const incRes = await fetch("/api/income", {
         headers: { Authorization: `Bearer ${token}` }
       });
-      const expRes = await fetch("http://127.0.0.1:8000/api/expenses", {
+      const expRes = await fetch("/api/expenses", {
         headers: { Authorization: `Bearer ${token}` }
       });
       
@@ -49,7 +49,7 @@ export default function Transactions({ token, onAddExpense }) {
     e.preventDefault();
     if (!incomeAmount || !incomeSource) return;
     try {
-      const res = await fetch("http://127.0.0.1:8000/api/income", {
+      const res = await fetch("/api/income", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -77,7 +77,7 @@ export default function Transactions({ token, onAddExpense }) {
     e.preventDefault();
     if (!expenseAmount) return;
     try {
-      const res = await fetch("http://127.0.0.1:8000/api/expenses", {
+      const res = await fetch("/api/expenses", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -108,7 +108,7 @@ export default function Transactions({ token, onAddExpense }) {
   const handleDeleteIncome = async (id) => {
     if (!confirm("Are you sure you want to delete this income?")) return;
     try {
-      const res = await fetch(`http://127.0.0.1:8000/api/income/${id}`, {
+      const res = await fetch(`/api/income/${id}`, {
         method: "DELETE",
         headers: { Authorization: `Bearer ${token}` }
       });
@@ -121,7 +121,7 @@ export default function Transactions({ token, onAddExpense }) {
   const handleDeleteExpense = async (id) => {
     if (!confirm("Are you sure you want to delete this expense?")) return;
     try {
-      const res = await fetch(`http://127.0.0.1:8000/api/expenses/${id}`, {
+      const res = await fetch(`/api/expenses/${id}`, {
         method: "DELETE",
         headers: { Authorization: `Bearer ${token}` }
       });

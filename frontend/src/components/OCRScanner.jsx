@@ -11,6 +11,40 @@ export default function OCRScanner({ token, onAddExpense, triggerRefresh }) {
   // OCR Results State
   const [ocrData, setOcrData] = useState(null);
 
+  const normalizeReceiptDate = (value) => {
+    if (!value) return new Date().toISOString().split("T")[0];
+
+    const cleaned = value.trim();
+    if (/^\d{4}-\d{2}-\d{2}$/.test(cleaned)) return cleaned;
+
+    const numericMatch = cleaned.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{2}|\d{4})$/);
+    if (numericMatch) {
+      const first = parseInt(numericMatch[1], 10);
+      const second = parseInt(numericMatch[2], 10);
+      const rawYear = numericMatch[3];
+      const year = rawYear.length === 2 ? 2000 + parseInt(rawYear, 10) : parseInt(rawYear, 10);
+      const month = first > 12 ? second : first;
+      const day = first > 12 ? first : second;
+      const date = new Date(year, month - 1, day);
+      if (!Number.isNaN(date.getTime())) {
+        const yyyy = date.getFullYear();
+        const mm = String(date.getMonth() + 1).padStart(2, "0");
+        const dd = String(date.getDate()).padStart(2, "0");
+        return `${yyyy}-${mm}-${dd}`;
+      }
+    }
+
+    const parsed = new Date(cleaned);
+    if (!Number.isNaN(parsed.getTime())) {
+      const yyyy = parsed.getFullYear();
+      const mm = String(parsed.getMonth() + 1).padStart(2, "0");
+      const dd = String(parsed.getDate()).padStart(2, "0");
+      return `${yyyy}-${mm}-${dd}`;
+    }
+
+    return new Date().toISOString().split("T")[0];
+  };
+
   const handleFileChange = (e) => {
     const selected = e.target.files[0];
     if (selected) {
@@ -49,7 +83,7 @@ export default function OCRScanner({ token, onAddExpense, triggerRefresh }) {
     formData.append("file", file);
 
     try {
-      const res = await fetch("http://127.0.0.1:8000/api/ocr/scan", {
+      const res = await fetch("/api/ocr/scan", {
         method: "POST",
         headers: {
           Authorization: `Bearer ${token}`
@@ -59,7 +93,10 @@ export default function OCRScanner({ token, onAddExpense, triggerRefresh }) {
 
       if (res.ok) {
         const data = await res.json();
-        setOcrData(data);
+        setOcrData({
+          ...data,
+          date: normalizeReceiptDate(data.date)
+        });
       } else {
         const err = await res.json();
         setError(err.detail || "Scanning failed. Please make sure the receipt is legible.");
@@ -81,7 +118,7 @@ export default function OCRScanner({ token, onAddExpense, triggerRefresh }) {
   const handleConfirmAndAdd = async () => {
     if (!ocrData) return;
     try {
-      const res = await fetch("http://127.0.0.1:8000/api/expenses", {
+      const res = await fetch("/api/expenses", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -90,7 +127,7 @@ export default function OCRScanner({ token, onAddExpense, triggerRefresh }) {
         body: JSON.stringify({
           amount: parseFloat(ocrData.amount),
           category: ocrData.category,
-          date: ocrData.date,
+          date: normalizeReceiptDate(ocrData.date),
           description: `${ocrData.merchant}`
         })
       });
@@ -111,11 +148,11 @@ export default function OCRScanner({ token, onAddExpense, triggerRefresh }) {
           });
         }
       } else {
-        const err = await res.json();
-        setError(err.detail || "Failed to record expense");
-      }
-    } catch (err) {
-      setError("Failed to add expense. Try again.");
+      const err = await res.json().catch(() => ({}));
+      setError(err.detail || "Failed to record expense");
+    }
+  } catch (err) {
+      setError(`Failed to add expense. ${err.message || "Try again."}`);
     }
   };
 
