@@ -1,0 +1,7 @@
+google-generativeai
+numpy
+pandas
+scikit-learn
+xgboost
+joblib
+python-dotenv
